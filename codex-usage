@@ -1,0 +1,72 @@
+#!/bin/bash
+# codex-usage - Display live Codex rate limit usage (similar to gsmi)
+# Fetches real-time data from the ChatGPT backend API.
+
+set -euo pipefail
+
+AUTH_FILE="$HOME/.codex/auth.json"
+
+if [ ! -f "$AUTH_FILE" ]; then
+    echo "No Codex auth found. Run 'codex login' first."
+    exit 1
+fi
+
+python3 - "$AUTH_FILE" <<'PYEOF'
+import json, sys, urllib.request
+from datetime import datetime, timezone
+
+auth_file = sys.argv[1]
+with open(auth_file) as f:
+    auth = json.load(f)
+
+token = auth["tokens"]["access_token"]
+account_id = auth["tokens"]["account_id"]
+
+url = "https://chatgpt.com/backend-api/codex/usage"
+req = urllib.request.Request(url)
+req.add_header("Authorization", f"Bearer {token}")
+req.add_header("ChatGPT-Account-ID", account_id)
+req.add_header("User-Agent", "codex-cli")
+req.add_header("Accept", "application/json")
+
+try:
+    resp = urllib.request.urlopen(req, timeout=10)
+    data = json.loads(resp.read().decode())
+except urllib.error.HTTPError as e:
+    if e.code == 401:
+        print("Auth token expired. Open Codex to refresh.")
+    else:
+        print(f"API error: {e.code}")
+    sys.exit(1)
+except Exception as e:
+    print(f"Failed to fetch usage: {e}")
+    sys.exit(1)
+
+rl = data.get("rate_limit", {})
+pri = rl.get("primary_window", {})
+sec = rl.get("secondary_window", {})
+plan = data.get("plan_type", "unknown") or "unknown"
+
+def bar(used_pct, width=20):
+    filled = int(round(used_pct / 100.0 * width))
+    return "\u2588" * filled + "\u2591" * (width - filled)
+
+def fmt_reset(epoch):
+    if not epoch:
+        return "unknown"
+    dt = datetime.fromtimestamp(epoch, tz=timezone.utc).astimezone()
+    return dt.strftime("%H:%M")
+
+def fmt_reset_date(epoch):
+    if not epoch:
+        return "unknown"
+    dt = datetime.fromtimestamp(epoch, tz=timezone.utc).astimezone()
+    return dt.strftime("%H:%M on %d %b")
+
+pri_used = pri.get("used_percent", 0)
+sec_used = sec.get("used_percent", 0)
+
+print(f"Codex Usage ({plan.capitalize()})")
+print(f"  5h limit:     [{bar(pri_used)}] {100-pri_used:.0f}% left (resets {fmt_reset(pri.get('reset_at'))})")
+print(f"  Weekly limit: [{bar(sec_used)}] {100-sec_used:.0f}% left (resets {fmt_reset_date(sec.get('reset_at'))})")
+PYEOF
