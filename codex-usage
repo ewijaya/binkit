@@ -1,6 +1,25 @@
 #!/bin/bash
-# codex-usage - Display live Codex rate limit usage (similar to gsmi)
-# Fetches real-time data from the ChatGPT backend API.
+# codex-usage - Display live OpenAI Codex CLI rate limits from the terminal.
+#
+# Queries the ChatGPT backend API for real-time 5-hour and weekly usage
+# percentages, then renders a compact progress-bar summary.
+#
+# Prerequisites:
+#   - python3
+#   - OpenAI Codex CLI installed and logged in (`codex login`)
+#     Auth token is read from ~/.codex/auth.json
+#
+# Usage:
+#   codex-usage
+#
+# Example output:
+#   Codex Usage (Plus)
+#     5h limit:     [█████░░░░░░░░░░░░░░░] 76% left (resets 18:42)
+#     Weekly limit: [█████████████░░░░░░░] 35% left (resets 01:43 on 19 Mar)
+#
+# Notes:
+#   - This is a read-only API call; it does NOT consume any rate limit quota.
+#   - If the OAuth token has expired, open Codex once to refresh it.
 
 set -euo pipefail
 

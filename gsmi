@@ -1,3 +1,19 @@
 #!/bin/bash
+# gsmi - Compact one-line GPU status monitor.
+#
+# Displays GPU utilization and VRAM usage, followed by per-process memory
+# breakdown. A quick alternative to the full nvidia-smi table.
+#
+# Prerequisites:
+#   - nvidia-smi (NVIDIA driver must be installed)
+#
+# Usage:
+#   gsmi
+#
+# Example output:
+#   GPU: 45% | VRAM: 6144/24576 MB
+#     PID 12345 | python3 | 4096 MB
+#     PID 12346 | ollama  | 2048 MB
+
 nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits | awk -F", " '{printf "GPU: %s%% | VRAM: %s/%s MB\n", $1, $2, $3}'
 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits | awk -F", " '{printf "  PID %s | %s | %s MB\n", $1, $2, $3}'
