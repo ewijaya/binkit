@@ -1,0 +1,14 @@
+# Scripts with hardcoded secrets, instance IDs, or credentials
+stopinstance
+p2
+
+# Common secret/config files
+*.env
+*.pem
+*.key
+credentials*
+*secret*
+*token*
+
+# OS junk
+.DS_Store
