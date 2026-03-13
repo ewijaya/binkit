@@ -1,0 +1,96 @@
+#!/bin/bash
+# bgrun - Run a command in the background with logging and auto-stop.
+#
+# Wraps any command with nohup, writes output to a timestamped log file
+# in ./logs/, and stops the EC2 instance when the command finishes.
+#
+# Prerequisites:
+#   - ~/bin/stopinstance (called automatically after command completes)
+#
+# Usage:
+#   bgrun <command> [args...]
+#   bgrun --no-stop <command> [args...]
+#   bgrun '<cmd1> && <cmd2> && <cmd3>'
+#
+# Options:
+#   --no-stop   Don't stop the instance after the command finishes.
+#               By default, ~/bin/stopinstance runs after completion.
+#
+# Examples:
+#   bgrun python scripts/train_grpo.py --config configs/grpo_vanilla.yaml
+#     => nohup bash -c '... && stopinstance' > logs/train_grpo-20260313_1425.log 2>&1 &
+#
+#   bgrun --no-stop ./run_training.sh
+#     => nohup bash -c '...' > logs/run_training-20260313_1425.log 2>&1 &
+#
+#   bgrun 'python calibration.py && python train.py'
+#     => nohup bash -c '... && stopinstance' > logs/calibration-20260313_1425.log 2>&1 &
+#
+# Log naming:
+#   Derives the log name from the first recognizable word in the command,
+#   stripping paths and extensions. E.g.:
+#     python scripts/train_grpo.py  =>  train_grpo-TIMESTAMP.log
+#     ./run_training.sh             =>  run_training-TIMESTAMP.log
+#
+# Output:
+#   Prints the PID and log path so you can tail -f it immediately.
+
+set -euo pipefail
+
+# --- Parse --no-stop flag ---
+STOP=true
+if [[ "${1:-}" == "--no-stop" ]]; then
+    STOP=false
+    shift
+fi
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: bgrun [--no-stop] <command> [args...]" >&2
+    exit 1
+fi
+
+# --- Build the full command string ---
+# If a single quoted argument with spaces, use it as-is (pipeline mode).
+# Otherwise, join all args.
+if [[ $# -eq 1 && "$1" == *" "* ]]; then
+    CMD="$1"
+else
+    CMD="$*"
+fi
+
+# --- Derive log name from the command ---
+# Strategy: find the first token that looks like a script/file, strip path and extension.
+# Falls back to "bgrun" if nothing sensible is found.
+log_name=""
+for token in $CMD; do
+    # Skip common interpreters and flags
+    case "$token" in
+        python|python3|bash|sh|env|nohup|sudo|--*|-*) continue ;;
+    esac
+    # Use basename, strip extension
+    base=$(basename "$token")
+    base="${base%.*}"
+    if [[ -n "$base" ]]; then
+        log_name="$base"
+        break
+    fi
+done
+log_name="${log_name:-bgrun}"
+
+# --- Create logs dir and build log path ---
+mkdir -p logs
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOGFILE="logs/${log_name}-${TIMESTAMP}.log"
+
+# --- Append stopinstance unless --no-stop ---
+if $STOP; then
+    FULL_CMD="${CMD} && /home/ubuntu/bin/stopinstance"
+else
+    FULL_CMD="$CMD"
+fi
+
+# --- Launch in background ---
+nohup bash -c "$FULL_CMD" > "$LOGFILE" 2>&1 &
+PID=$!
+
+echo "PID ${PID} | ${LOGFILE}"
