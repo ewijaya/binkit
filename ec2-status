@@ -1,0 +1,50 @@
+#!/bin/bash
+# ec2-status - Compact overview of your EC2 instances.
+#
+# Shows instance name, type, state, uptime, and IP in a single table.
+# Running instances are listed first.
+#
+# Prerequisites:
+#   - AWS CLI configured with valid credentials
+#
+# Usage:
+#   ec2-status
+#
+# Example output:
+#   NAME          TYPE        STATE    UPTIME   IP
+#   gpu-VIII      g5.xlarge   running  2d 14h   13.115.99.175
+#   gpu-VII       t3.small    running  0d  6h   18.182.120.74
+#   gpu-VI        m4.large    stopped  -        43.206.201.72
+
+aws ec2 describe-instances \
+  --query 'Reservations[].Instances[].[Tags[?Key==`Name`].Value|[0],InstanceType,State.Name,LaunchTime,PublicIpAddress]' \
+  --output json \
+| python3 -c "
+import json, sys
+from datetime import datetime, timezone
+
+data = json.load(sys.stdin)
+now = datetime.now(timezone.utc)
+
+rows = []
+for name, itype, state, launch, ip in data:
+    name = name or '-'
+    ip = ip or '-'
+    if state == 'running':
+        lt = datetime.fromisoformat(launch.replace('+00:00', '+00:00'))
+        if lt.tzinfo is None:
+            lt = lt.replace(tzinfo=timezone.utc)
+        delta = now - lt
+        days = delta.days
+        hrs = delta.seconds // 3600
+        uptime = f'{days}d {hrs:2d}h'
+    else:
+        uptime = '-'
+    rows.append((name, itype, state, uptime, ip))
+
+rows.sort(key=lambda r: (0 if r[2] == 'running' else 1, r[0]))
+
+print(f\"{'NAME':<18} {'TYPE':<12} {'STATE':<9} {'UPTIME':<9} {'IP'}\")
+for name, itype, state, uptime, ip in rows:
+    print(f'{name:<18} {itype:<12} {state:<9} {uptime:<9} {ip}')
+"
