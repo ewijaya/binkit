@@ -52,10 +52,24 @@ fi
 # --- Build the full command string ---
 # If a single quoted argument with spaces, use it as-is (pipeline mode).
 # Otherwise, join all args.
+# Also: if the first non-interpreter arg is a local file without a path prefix,
+# prepend ./ so 'bgrun foo.sh' works without requiring './foo.sh'.
 if [[ $# -eq 1 && "$1" == *" "* ]]; then
     CMD="$1"
 else
-    CMD="$*"
+    # Fix up bare script names: "foo.sh" => "./foo.sh" if the file exists locally
+    args=("$@")
+    for i in "${!args[@]}"; do
+        case "${args[$i]}" in
+            python|python3|bash|sh|env|nohup|sudo|--*|-*) continue ;;
+        esac
+        # First real argument — if it's a local file without a slash, prepend ./
+        if [[ "${args[$i]}" != */* && -f "${args[$i]}" ]]; then
+            args[$i]="./${args[$i]}"
+        fi
+        break
+    done
+    CMD="${args[*]}"
 fi
 
 # --- Derive log name from the command ---

@@ -12,6 +12,7 @@ Just small scripts that do one thing each, badly enough that I haven't bothered 
 | `codex-usage` | Shows OpenAI Codex rate limits so I know when to stop pretending I'm productive |
 | `ec2-status` | Lists EC2 instances in a table because the AWS console takes too long to load |
 | `gsmi` | `nvidia-smi` but fewer columns because the real one hurts my eyes |
+| `bgrun` | Runs any command in the background with nohup, timestamped log, and auto-stops the EC2 instance when done |
 | `nuke-pycache` | Deletes `__pycache__` and `.pyc` files before they outnumber your actual code |
 
 ## Installation
